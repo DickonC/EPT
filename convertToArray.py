@@ -1,120 +1,85 @@
-from PIL import Image
 import numpy as np
+from PIL import Image
 from tkinter import Tk, filedialog
 import matplotlib.pyplot as plt
 
-def visualize_array(binary_array, title="Binary Array"):
+def visualize_array(array, title="Speckle Pattern"):
     """
-    Visualize the binary array as an image.
-    Black pixels (1) will be shown as black, white pixels (0) as white.
+    A simple helper function to display the array as an image using Matplotlib.
     """
-    plt.figure(figsize=(8, 8))
-    plt.imshow(binary_array, cmap='binary', interpolation='nearest')
-    plt.title(title)
+    plt.figure(figsize=(10, 8))
+    # Using 'gray' colormap as it works well for both binary (0,1) and grayscale (0-255) arrays
+    plt.imshow(array, cmap='gray')
+    plt.title(f"{title} - Shape: {array.shape}")
     plt.axis('off')
     plt.show()
 
-def crop_white_borders(binary_array):
+def convert_png_to_array(target_height, target_width, show_info=False, png_path=None):
     """
-    Crop the white borders from the binary array.
-    Returns the cropped array containing only the speckle pattern.
-    """
-    # Find rows and columns that contain at least one black pixel (1)
-    rows_with_black = np.any(binary_array == 1, axis=1)
-    cols_with_black = np.any(binary_array == 1, axis=0)
-    
-    # Find the first and last rows/columns with black pixels
-    first_row = np.where(rows_with_black)[0][0]
-    last_row = np.where(rows_with_black)[0][-1]
-    first_col = np.where(cols_with_black)[0][0]
-    last_col = np.where(cols_with_black)[0][-1]
-    
-    # Crop the array to these boundaries
-    cropped_array = binary_array[first_row:last_row+1, first_col:last_col+1]
-    
-    # Make the array square by padding with white (0) if necessary
-    max_dim = max(cropped_array.shape)
-    square_array = np.zeros((max_dim, max_dim), dtype=np.uint8)
-    
-    # Calculate the position to place the cropped array in the center
-    start_row = (max_dim - cropped_array.shape[0]) // 2
-    start_col = (max_dim - cropped_array.shape[1]) // 2
-    
-    # Place the cropped array in the center of the square array
-    square_array[start_row:start_row+cropped_array.shape[0], 
-                start_col:start_col+cropped_array.shape[1]] = cropped_array
-    
-    return square_array
+    Opens a PNG file, resizes it to a target resolution, and converts it
+    into a binary NumPy array (0 for white, 1 for black).
 
-def convert_png_to_binary_array(show_info=True, show_visualization=True):
-    """
-    Convert a PNG file to a binary numpy array.
-    
-    Parameters:
-    - show_info: If True, prints information about the conversion
-    - show_visualization: If True, shows the visualization of the array
-    
+    Args:
+        target_height (int): The desired height of the output array. Defaults to 1200.
+        target_width (int): The desired width of the output array. Defaults to 1920.
+        show_info (bool): If True, prints array info and shows a visualization.
+
     Returns:
-    - numpy array containing the binary image (1 for black, 0 for white)
+        np.array: The processed binary NumPy array, or None if no file is selected.
     """
-    # Create a Tkinter root window (but hide it)
-    root = Tk()
-    root.withdraw()
+    # Use a file dialog to let the user select a PNG file
+    # root = Tk()
+    # root.withdraw()  # Hide the small Tkinter window
+    # png_path = filedialog.askopenfilename(
+    #     title="Select PNG Speckle Pattern",
+    #     filetypes=[("PNG files", "*.png")]
+    # )
 
-    # Open file dialog to select PNG file
-    png_path = filedialog.askopenfilename(
-        title="Select PNG file",
-        filetypes=[("PNG files", "*.png")]
-    )
-
+    # Exit if the user cancels the file dialog
     if not png_path:
-        print("No file selected. Exiting...")
+        print("No file selected. Exiting.")
         return None
 
     try:
-        # Open the image using PIL and convert to grayscale
-        img = Image.open(png_path).convert('L')
-        
-        # Convert image to numpy array
-        img_array = np.array(img)
-        
-        # Convert to binary (0s and 1s)
-        # Values above 128 become 0 (white), below become 1 (black)
-        binary_array = (img_array <= 128).astype(np.uint8)
-        
-        # Crop the white borders and make square
-        cropped_array = crop_white_borders(binary_array)
-        
+        # Open the image using Pillow and convert to grayscale ('L' mode)
+        original_image = Image.open(png_path).convert('L')
+
+        # --- RESIZING STEP ---
+        # Resize the image to the target resolution using a high-quality filter (LANCZOS)
+        resized_image = original_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+
+        # --- CONVERSION TO BINARY ARRAY ---
+        # Convert the resized image to a NumPy array.
+        # Pixels with a brightness value <= 128 become 1 (black).
+        # Pixels with a brightness value > 128 become 0 (white).
+        final_array = (np.array(resized_image) <= 128).astype(np.uint8)
+
+        # If the show_info flag is True, print details and visualize the result
         if show_info:
-            # Print some information about the array
-            print(f"\nImage converted successfully!")
-            print(f"Original array shape: {img_array.shape}")
-            print(f"Cropped array shape: {cropped_array.shape}")
-            print(f"Number of 1s: {np.sum(cropped_array)}")
-            print(f"Number of 0s: {cropped_array.size - np.sum(cropped_array)}")
+            print("\n--- Image Conversion Details ---")
+            print(f"Original image dimensions: {original_image.size}")
+            print(f"Target array dimensions: {target_width}x{target_height}")
+            print(f"Final array shape: {final_array.shape}")
             
-            # Print a portion of the array from the middle
-            print("\nMiddle portion of the binary array (50x50):")
-            center_row = cropped_array.shape[0] // 2
-            center_col = cropped_array.shape[1] // 2
-            start_row = max(0, center_row - 25)
-            start_col = max(0, center_col - 25)
-            end_row = min(cropped_array.shape[0], center_row + 25)
-            end_col = min(cropped_array.shape[1], center_col + 25)
-            
-            # Print the array portion
-            for row in cropped_array[start_row:end_row]:
-                print(''.join(map(str, row[start_col:end_col])))
-        
-        if show_visualization:
-            visualize_array(cropped_array)
-        
-        return cropped_array
+            # Show the final array as an image
+            visualize_array(final_array, title="Final Speckle Array")
+
+        return final_array
 
     except Exception as e:
-        print(f"An error occurred: {str(e)}")
+        print(f"An error occurred during conversion: {e}")
         return None
 
+# --- Main execution block ---
+# This part runs only when you execute this script directly.
+# It demonstrates how to call the main function.
 if __name__ == "__main__":
-    # When running this file directly, show all information and visualization
-    binary_array = convert_png_to_binary_array(show_info=True, show_visualization=True)
+    # Call the function and request the info/visualization to be shown.
+    # The resulting array is stored in the 'speckle_pattern' variable.
+    print("Starting speckle pattern conversion...")
+    speckle_pattern = convert_png_to_array(show_info=True)
+
+    if speckle_pattern is not None:
+        print("\nConversion complete. The array is ready to be used by other scripts.")
+    else:
+        print("\nConversion failed.")
